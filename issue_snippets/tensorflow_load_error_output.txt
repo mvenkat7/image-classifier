@@ -1,0 +1,159 @@
+Downloading and preparing dataset oxford_flowers102 (336.76 MiB) to /root/tensorflow_datasets/oxford_flowers102/0.0.1...
+Dl Completed...: 100%
+1/1 [00:14<00:00, 14.68s/ url]
+Dl Size...: 100%
+328/328 [00:14<00:00, 22.44 MiB/s]
+Extraction completed...:
+0/0 [00:14<?, ? file/s]
+
+
+
+---------------------------------------------------------------------------
+NonMatchingChecksumError                  Traceback (most recent call last)
+<ipython-input-6-48666fa18e60> in <module>
+     26 
+     27 
+---> 28 dataset, info = tfds.load("oxford_flowers102",with_info=True,download=True)
+     29 #trainloader = torch.utils.data.DataLoader(train_data, batch_size=50, shuffle=True)
+     30 #validloader = torch.utils.data.DataLoader(valid_data, batch_size=50)
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/api_utils.py in disallow_positional_args_dec(fn, instance, args, kwargs)
+     50     _check_no_positional(fn, args, ismethod, allowed=allowed)
+     51     _check_required(fn, kwargs)
+---> 52     return fn(*args, **kwargs)
+     53 
+     54   return disallow_positional_args_dec(wrapped)  # pylint: disable=no-value-for-parameter
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/registered.py in load(name, split, data_dir, batch_size, in_memory, shuffle_files, download, as_supervised, decoders, with_info, builder_kwargs, download_and_prepare_kwargs, as_dataset_kwargs, try_gcs)
+    298   if download:
+    299     download_and_prepare_kwargs = download_and_prepare_kwargs or {}
+--> 300     dbuilder.download_and_prepare(**download_and_prepare_kwargs)
+    301 
+    302   if as_dataset_kwargs is None:
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/api_utils.py in disallow_positional_args_dec(fn, instance, args, kwargs)
+     50     _check_no_positional(fn, args, ismethod, allowed=allowed)
+     51     _check_required(fn, kwargs)
+---> 52     return fn(*args, **kwargs)
+     53 
+     54   return disallow_positional_args_dec(wrapped)  # pylint: disable=no-value-for-parameter
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/dataset_builder.py in download_and_prepare(self, download_dir, download_config)
+    285         self._download_and_prepare(
+    286             dl_manager=dl_manager,
+--> 287             download_config=download_config)
+    288 
+    289         # NOTE: If modifying the lines below to put additional information in
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/dataset_builder.py in _download_and_prepare(self, dl_manager, download_config)
+    946     super(GeneratorBasedBuilder, self)._download_and_prepare(
+    947         dl_manager=dl_manager,
+--> 948         max_examples_per_split=download_config.max_examples_per_split,
+    949     )
+    950 
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/dataset_builder.py in _download_and_prepare(self, dl_manager, **prepare_split_kwargs)
+    802     # Generating data for all splits
+    803     split_dict = splits_lib.SplitDict()
+--> 804     for split_generator in self._split_generators(dl_manager):
+    805       if splits_lib.Split.ALL == split_generator.split_info.name:
+    806         raise ValueError(
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/image/oxford_flowers102.py in _split_generators(self, dl_manager)
+     87             extract_method=tfds.download.ExtractMethod.TAR),
+     88         "labels": os.path.join(_BASE_URL, "imagelabels.mat"),
+---> 89         "setid": os.path.join(_BASE_URL, "setid.mat"),
+     90     })
+     91 
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/download/download_manager.py in download_and_extract(self, url_or_urls)
+    357     with self._downloader.tqdm():
+    358       with self._extractor.tqdm():
+--> 359         return _map_promise(self._download_extract, url_or_urls)
+    360 
+    361   @property
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/download/download_manager.py in _map_promise(map_fn, all_inputs)
+    393   """Map the function into each element and resolve the promise."""
+    394   all_promises = utils.map_nested(map_fn, all_inputs)  # Apply the function
+--> 395   res = utils.map_nested(_wait_on_promise, all_promises)
+    396   return res
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/utils/py_utils.py in map_nested(function, data_struct, dict_only, map_tuple)
+    127     return {
+    128         k: map_nested(function, v, dict_only, map_tuple)
+--> 129         for k, v in data_struct.items()
+    130     }
+    131   elif not dict_only:
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/utils/py_utils.py in <dictcomp>(.0)
+    127     return {
+    128         k: map_nested(function, v, dict_only, map_tuple)
+--> 129         for k, v in data_struct.items()
+    130     }
+    131   elif not dict_only:
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/utils/py_utils.py in map_nested(function, data_struct, dict_only, map_tuple)
+    141         return tuple(mapped)
+    142   # Singleton
+--> 143   return function(data_struct)
+    144 
+    145 
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/download/download_manager.py in _wait_on_promise(p)
+    377 
+    378   def _wait_on_promise(p):
+--> 379     return p.get()
+    380 
+    381 else:
+
+/opt/conda/lib/python3.7/site-packages/promise/promise.py in get(self, timeout)
+    508         target = self._target()
+    509         self._wait(timeout or DEFAULT_TIMEOUT)
+--> 510         return self._target_settled_value(_raise=True)
+    511 
+    512     def _target_settled_value(self, _raise=False):
+
+/opt/conda/lib/python3.7/site-packages/promise/promise.py in _target_settled_value(self, _raise)
+    512     def _target_settled_value(self, _raise=False):
+    513         # type: (bool) -> Any
+--> 514         return self._target()._settled_value(_raise)
+    515 
+    516     _value = _reason = _target_settled_value
+
+/opt/conda/lib/python3.7/site-packages/promise/promise.py in _settled_value(self, _raise)
+    222             if _raise:
+    223                 raise_val = self._fulfillment_handler0
+--> 224                 reraise(type(raise_val), raise_val, self._traceback)
+    225             return self._fulfillment_handler0
+    226 
+
+/opt/conda/lib/python3.7/site-packages/six.py in reraise(tp, value, tb)
+    691             if value.__traceback__ is not tb:
+    692                 raise value.with_traceback(tb)
+--> 693             raise value
+    694         finally:
+    695             value = None
+
+/opt/conda/lib/python3.7/site-packages/promise/promise.py in try_catch(handler, *args, **kwargs)
+     83     # type: (Callable, Any, Any) -> Union[Tuple[Any, None], Tuple[None, Tuple[Exception, Optional[TracebackType]]]]
+     84     try:
+---> 85         return (handler(*args, **kwargs), None)
+     86     except Exception as e:
+     87         tb = exc_info()[2]
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/download/download_manager.py in callback(val)
+    244       checksum, dl_size = val
+    245       return self._handle_download_result(
+--> 246           resource, download_dir_path, checksum, dl_size)
+    247     return self._downloader.download(url, download_dir_path).then(callback)
+    248 
+
+/opt/conda/lib/python3.7/site-packages/tensorflow_datasets/core/download/download_manager.py in _handle_download_result(self, resource, tmp_dir_path, sha256, dl_size)
+    205       self._record_sizes_checksums()
+    206     elif (dl_size, sha256) != self._sizes_checksums.get(resource.url, None):
+--> 207       raise NonMatchingChecksumError(resource.url, tmp_path)
+    208     download_path = self._get_final_dl_path(resource.url, sha256)
+    209     resource_lib.write_info_file(resource, download_path, self._dataset_name,
+
+NonMatchingChecksumError: Artifact https://www.robots.ox.ac.uk/~vgg/data/flowers/102/102flowers.tgz, downloaded to /root/tensorflow_datasets/downloads/robots.ox.ac.uk_vgg_flowers_102_102flowersoWedSp98maBn1wypsDib6T-q2NVbO40fwvTflmPmQpY.tgz.tmp.5c6e1fb33614455da7594c52706e01b1/102flowers.tgz, has wrong checksum.

@@ -1,211 +1,77 @@
-# -*- coding: utf-8 -*-
-"""
-@author: Venkatesh Marella
-@file: prediction file
-@published : 07-Jan-2021
-"""
-
-# ------------------------------------------------------------------------------- #
-# Import Packages
-# ------------------------------------------------------------------------------- #
-
+import tensorflow as tf
+from PIL import Image
+import tensorflow_hub as hub
 import argparse
-import json
-import torch
 import numpy as np
-#from train import check_gpu
-from torchvision import models
-import PIL
-from math import ceil
+import json
 
-# ------------------------------------------------------------------------------- #
-# Function arg_parser() parses keyword arguments from the command line
-# ------------------------------------------------------------------------------- #
-def arg_parser():
-    # Define a parser
-    parser = argparse.ArgumentParser(description="Neural Key Settings")
+IMG_SIZE = 224
+IMG_SHAPE = (IMG_SIZE, IMG_SIZE, 3)
 
-    # Point towards image for prediction
-    parser.add_argument('--image', 
-                        type=str, 
-                        help='Path of the Image',
-                        required=True)
-
-    # Load checkpoint created by train.py
-    parser.add_argument('--checkpoint', 
-                        type=str, 
-                        help='path to checkpoint file',
-                        required=True)
-    
-    # define top-k classes
-    parser.add_argument('--top_k', 
-                        type=int,
-                        default=5,						
-                        help='Choose top K matches as int.')
-    
-    # define label category names
-    parser.add_argument('--category_names', 
-                        type=str,
-                        default="label_map.json",
-                        help='Mapping from categories to real names.')
-
-    # Add GPU Option to parser
-    parser.add_argument('--gpu', 
-                        action="store_true", 
-                        help='Use GPU + Cuda for calculations')
-
-    # Parse args
-    args = parser.parse_args()
-    
-    return args
+def get_class_names(json_file):
+    with open(json_file, 'r') as f:
+        class_names = json.load(f)
+    class_names_new = dict()
+    for key in class_names:
+        class_names_new[str(int(key)-1)] = class_names[key]
+    return class_names_new
 
 
-def load_checkpoint(checkpoint_path):
-    # Load the saved file
-    checkpoint = torch.load(checkpoint_path)
-    
-    # Load Defaults if none specified
-    if checkpoint['architecture'] == 'vgg16':
-        model = models.vgg16(pretrained=True)
-        model.name = "vgg16"
-    else: 
-        exec("model = models.{}(pretrained=True)".checkpoint['architecture'])
-        model.name = checkpoint['architecture']
-    
-    # Freeze parameters so we don't backprop through them
-    for param in model.parameters(): param.requires_grad = False
-    
-    # Load keys from checkpoint
-    model.class_to_idx = checkpoint['class_to_idx']
-    model.classifier = checkpoint['classifier']
-    model.load_state_dict(checkpoint['state_dict'])
-    
+def load_model(model_path):
+    model = tf.keras.models.load_model(model_path, custom_objects={'KerasLayer':hub.KerasLayer})
+    print(model.summary())
     return model
 
+def process_image(numpy_image):
+    print(numpy_image.shape)
+    tensor_img = tf.image.convert_image_dtype(numpy_image, dtype=tf.int16, saturate=False)
+    resized_img = tf.image.resize(numpy_image,(IMG_SIZE,IMG_SIZE)).numpy()
+    norm_img = resized_img/255
+    return norm_img
 
-def process_image(image_path):
-    test_image = PIL.Image.open(image_path)
+def predict(image_path, model_path, top_k, all_class_names):
+    top_k = int(top_k)
+    print(top_k, type(top_k))
+    model = load_model(model_path)
 
-    # extract dimensions
-    orig_width, orig_height = test_image.size
+    img = Image.open(image_path)
+    test_image = np.asarray(img)
 
-    # Find shorter size and create settings to crop shortest side to 256
-    if orig_width < orig_height: resize_size=[256, 256**600]
-    else: resize_size=[256**600, 256]
-        
-    test_image.thumbnail(size=resize_size)
+    # processing the image
+    processed_test_image = process_image(test_image)
 
-    # Find pixels to crop on to create 224x224 image
-    center = orig_width/4, orig_height/4
-    left, top, right, bottom = center[0]-(244/2), center[1]-(244/2), center[0]+(244/2), center[1]+(244/2)
-    test_image = test_image.crop((left, top, right, bottom))
+    # fetching prediction probabilities
+    prob_preds = model.predict(np.expand_dims(processed_test_image, axis=0))
+    prob_preds = prob_preds[0].tolist()
 
-    # Converrt to numpy - 244x244 image w/ 3 channels (RGB)
-    np_image = np.array(test_image)/255 # Divided by 255 because imshow() expects integers (0:1)!!
+    # top 1 prediction
+    top_pred_class_id = model.predict_classes(np.expand_dims(processed_test_image, axis=0))
+    top_pred_class_prob = prob_preds[top_pred_class_id[0]]
+    pred_class = all_class_names[str(top_pred_class_id[0])]
+    print("\n\nMost likely class image and it's probability :\n", "class_id :", top_pred_class_id, "class_name :",
+          pred_class, "; class_probability :", top_pred_class_prob)
 
-    # Normalize each color channel
-    normalise_means = [0.485, 0.456, 0.406]
-    normalise_std = [0.229, 0.224, 0.225]
-    np_image = (np_image-normalise_means)/normalise_std
-        
-    # Set the color to the first channel
-    np_image = np_image.transpose(2, 0, 1)
-    
-    return np_image
-
-
-def predict(image_tensor, model, device, cat_to_name, top_k):
-    ''' Predict the class (or classes) of an image using a trained deep learning model.
-    
-    image_path: string. Path to image, directly to image and not to folder.
-    model: pytorch neural network.
-    top_k: integer. The top K classes to be calculated
-    
-    returns top_probabilities(k), top_labels
-    '''
-    
-    # check top_k
-    if type(top_k) == type(None):
-        top_k = 5
-        print("Top K not given, setting to default value K=5")
-    
-    # Set model to evaluate
-    model.eval();
-
-    # Convert image from numpy to torch
-    torch_image = torch.from_numpy(np.expand_dims(image_tensor, 
-                                                  axis=0)).type(torch.FloatTensor)
-
-    model=model.cpu()
-
-    # Find probabilities (results) by passing through the function
-    log_probs = model.forward(torch_image)
-
-    # Convert to linear scale
-    linear_probs = torch.exp(log_probs)
-
-    # Find the top 5 results
-    top_probs, top_labels = linear_probs.topk(top_k)
-    
-    # Detatch all of the details
-    top_probs = np.array(top_probs.detach())[0]
-    top_labels = np.array(top_labels.detach())[0]
-    
-    # Convert to classes
-    idx_to_class = {val: key for key, val in    
-                                      model.class_to_idx.items()}
-    top_labels = [idx_to_class[lab] for lab in top_labels]
-    top_flowers = [cat_to_name[lab] for lab in top_labels]
-    
-    return top_probs, top_labels, top_flowers
+    values, indices = tf.math.top_k(prob_preds, k=top_k)
+    probs_topk = values.numpy().tolist()  # [0]
+    classes_topk = indices.numpy().tolist()  # [0]
+    print("top k probs:", probs_topk)
+    print("top k classes:", classes_topk)
+    class_labels = [all_class_names[str(i)] for i in classes_topk]
+    print('top k class labels:', class_labels)
+    class_prob_dict = dict(zip(class_labels, probs_topk))
+    print("\nTop K classes along with associated probabilities :\n", class_prob_dict)
 
 
-def print_probability(probs, flowers):
-    """
-    Converts two lists into a dictionary to print on screen
-    """
-    
-    for i, j in enumerate(zip(flowers, probs)):
-        print ("Rank {}:".format(i+1),
-               "Flower: {}, likely : {}% match".format(j[1], ceil(j[0]*100)))
-    
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Description for my parser")
+    parser.add_argument("image_path", help="Image Path", default="")
+    parser.add_argument("--saved_model", help="Model Path", default=".\\train_model\\my_model.h5",required=False)
+    parser.add_argument("--top_k", help="Fetch top k predictions", required=False, default=5)
+    parser.add_argument("--category_names", help="Class map json file", required=False, default="label_map.json")
+    args = parser.parse_args()
 
-# =============================================================================
-# Main Function
-# =============================================================================
+    all_class_names = get_class_names(args.category_names)
+    #     print("Displaying class names:\n",all_class_names)
 
-def main():
-    """
-    Executing relevant functions
-    """
-    
-    # Get Keyword Args for Prediction
-    args = arg_parser()
-    
-    # Load categories to names json file
-    with open(args.category_names, 'r') as f:
-        	cat_to_name = json.load(f)
-
-    # Load model trained with train.py
-    model = load_checkpoint(args.checkpoint)
-    
-    # Process Image
-    image_tensor = process_image(args.image)
-    
-    # Check for GPU
-    # remove CPU/GPU validation, setting device mode to CPU mode
-    #device = check_gpu(gpu_arg=args.gpu);
-    device="cpu"
-    
-    # Use `processed_image` to predict the top K most likely classes
-    top_probs, top_labels, top_flowers = predict(image_tensor, model, 
-                                                 device, cat_to_name,
-                                                 args.top_k)
-    
-    # Print out probabilities
-    print_probability(top_flowers, top_probs)
-
-# =============================================================================
-# Run Program
-# =============================================================================
-if __name__ == '__main__': main()
+    predict(args.image_path, args.saved_model, args.top_k, all_class_names)
+#     probs, classes, top_class_id, top_class_prob = predict(args.image_path, args.saved_model, args.top_k, all_class_names)
